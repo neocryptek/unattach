@@ -31,7 +31,7 @@ elif [[ "$OSTYPE" == "darwin"* ]]; then
   pushd tmp
   jar xf "$JAR_FILE"
   rm "$JAR_FILE"
-  ls *.dylib | xargs codesign -s "Developer ID Application: Rok Strnisa (73XQUXV944)" -f -v
+  ls *.dylib #| xargs codesign -s "Developer ID Application: Rok Strnisa (73XQUXV944)" -f -v
   jar cmf META-INF/MANIFEST.MF "../$JAR_PATH" ./*
   popd
   # Create APP.
@@ -44,29 +44,29 @@ elif [[ "$OSTYPE" == "darwin"* ]]; then
     --java-options "$JAVA_OPTION" \
     --type app-image
   # Sign APP's runtime and itself.
-  codesign -s "Developer ID Application: Rok Strnisa (73XQUXV944)" --options runtime --entitlements macos.entitlements -f -v Unattach.app/Contents/runtime/Contents/MacOS/libjli.dylib
-  codesign -s "Developer ID Application: Rok Strnisa (73XQUXV944)" --options runtime --entitlements macos.entitlements -f -v Unattach.app/Contents/MacOS/Unattach
-  codesign -s "Developer ID Application: Rok Strnisa (73XQUXV944)" --options runtime --entitlements macos.entitlements -f -v Unattach.app
+  #codesign -s "Developer ID Application: Rok Strnisa (73XQUXV944)" --options runtime --entitlements macos.entitlements -f -v Unattach.app/Contents/runtime/Contents/MacOS/libjli.dylib
+  #codesign -s "Developer ID Application: Rok Strnisa (73XQUXV944)" --options runtime --entitlements macos.entitlements -f -v Unattach.app/Contents/MacOS/Unattach
+  #codesign -s "Developer ID Application: Rok Strnisa (73XQUXV944)" --options runtime --entitlements macos.entitlements -f -v Unattach.app
   # Create DMG.
   rm -rf ./*.dmg
   jpackage --name Unattach --app-version $VERSION --description "$DESCRIPTION" --vendor "$VENDOR" --copyright "$COPYRIGHT" \
     --license-file LICENSE \
     --type dmg --app-image Unattach.app
   # Sign DMG.
-  codesign -s "Developer ID Application: Rok Strnisa (73XQUXV944)" --options runtime --entitlements macos.entitlements -vvvv --deep Unattach-$VERSION.dmg
+  #codesign -s "Developer ID Application: Rok Strnisa (73XQUXV944)" --options runtime --entitlements macos.entitlements -vvvv --deep Unattach-$VERSION.dmg
   # Upload DMG for verification.
-  REQUEST_UUID=$(xcrun altool --notarize-app --primary-bundle-id "app.unattach-$VERSION" -u "rok.strnisa@gmail.com" -p "@keychain:UNATTACH_APP_PASSWORD" --file Unattach-$VERSION.dmg | grep RequestUUID | awk '{print $3}')
+  #REQUEST_UUID=$(xcrun altool --notarize-app --primary-bundle-id "app.unattach-$VERSION" -u "rok.strnisa@gmail.com" -p "@keychain:UNATTACH_APP_PASSWORD" --file Unattach-$VERSION.dmg | grep RequestUUID | awk '{print $3}')
   # Wait for verification to complete.
-  while xcrun altool --notarization-info "$REQUEST_UUID" -u rok.strnisa@gmail.com -p "@keychain:UNATTACH_APP_PASSWORD" | grep "Status: in progress" > /dev/null; do
-    echo "Verification in progress..."
-    sleep 30
-  done
+  #while xcrun altool --notarization-info "$REQUEST_UUID" -u rok.strnisa@gmail.com -p "@keychain:UNATTACH_APP_PASSWORD" | grep "Status: in progress" > /dev/null; do
+    #echo "Verification in progress..."
+    #sleep 30
+  #done
   # Attach stamp to the DMG.
-  xcrun stapler staple Unattach-$VERSION.dmg
+  #xcrun stapler staple Unattach-$VERSION.dmg
   # Check APP and DMG.
-  spctl -vvv --assess --type exec Unattach.app
-  codesign -vvv --deep --strict Unattach-$VERSION.dmg
-  codesign -dvv Unattach-$VERSION.dmg
+  #spctl -vvv --assess --type exec Unattach.app
+  #codesign -vvv --deep --strict Unattach-$VERSION.dmg
+  #codesign -dvv Unattach-$VERSION.dmg
 elif [[ "$OSTYPE" == "msys" ]]; then
   rm -rf ./*.msi
   jpackage --type msi --name Unattach --app-version $VERSION --description "$DESCRIPTION" --vendor "$VENDOR" --copyright "$COPYRIGHT" \
