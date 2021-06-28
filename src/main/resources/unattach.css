@@ -18,7 +18,7 @@
 
 .sub-slogan {
   -fx-font-size: 14px;
-  -fx-padding: 0 0 20 0;
+  -fx-padding: 0 0 10 0;
 }
 
 .buy-coffee {
@@ -51,7 +51,7 @@
 }
 
 .sign-in-message {
-  -fx-padding: 20 0 0 0;
+  -fx-padding: 10 0 0 0;
 }
 
 .terms-and-conditions {
@@ -145,4 +145,12 @@
 .search-tab {
   -fx-border-color:gray;
   -fx-border-width: 1;
+}
+
+.checkbox-processed {
+  -fx-color: green;
+}
+
+.checkbox-failed {
+  -fx-color: red;
 }

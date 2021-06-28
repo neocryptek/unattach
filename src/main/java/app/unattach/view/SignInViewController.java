@@ -3,30 +3,21 @@ package app.unattach.view;
 import app.unattach.controller.Controller;
 import app.unattach.controller.ControllerFactory;
 import app.unattach.model.Constants;
-import app.unattach.model.DonationOption;
+import app.unattach.utils.Logger;
 import javafx.application.Platform;
 import javafx.concurrent.Task;
-import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
-import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import org.apache.maven.artifact.versioning.DefaultArtifactVersion;
 
 import java.io.IOException;
-import java.util.List;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 public class SignInViewController {
-  private static final Logger LOGGER = Logger.getLogger(SignInViewController.class.getName());
+  private static final Logger logger = Logger.get();
 
   private Controller controller;
-  @FXML
-  private ComboBox<DonationOption> buyCoffeeComboBox;
-  @FXML
-  private ComboBox<String> currencyComboBox;
   @FXML
   private Label signInMessageLabel;
   @FXML
@@ -45,8 +36,6 @@ public class SignInViewController {
   @FXML
   public void initialize() {
     controller = ControllerFactory.getDefaultController();
-    List<DonationOption> donationOptions = DonationViewUtils.getDonationOptions();
-    DonationViewUtils.configureDonationControls(controller, donationOptions, buyCoffeeComboBox, currencyComboBox);
     signInMessageLabel.setText("The first time you sign in, you will be asked to give the app permissions to your Gmail.\n" +
             "Click on 'How Unattach Works' to see why this is required and how your privacy is protected.");
     subscribeToUpdatesCheckBox.setSelected(controller.getConfig().getSubscribeToUpdates());
@@ -76,9 +65,9 @@ public class SignInViewController {
       protected Void call() throws Exception {
         String emailAddress = controller.signIn();
         if (controller.getConfig().getSubscribeToUpdates()) {
-          LOGGER.info("Subscribing to updates..");
+          logger.info("Subscribing to updates...");
           controller.subscribe(emailAddress);
-          LOGGER.info("Subscribing to updates.. successful.");
+          logger.info("Subscribing to updates... successful.");
         }
         return null;
       }
@@ -88,7 +77,7 @@ public class SignInViewController {
         try {
           Scenes.setScene(Scenes.MAIN);
         } catch (IOException e) {
-          LOGGER.log(Level.SEVERE, "Failed to load the main view.", e);
+          logger.error("Failed to load the main view.", e);
           e.printStackTrace();
         } finally {
           resetControls();
@@ -97,12 +86,12 @@ public class SignInViewController {
 
       @Override
       protected void cancelled() {
-        LOGGER.log(Level.WARNING, "Signing in cancelled.");
+        logger.warn("Signing in cancelled.");
       }
 
       @Override
       protected void failed() {
-        LOGGER.log(Level.SEVERE, "Failed to process sign in button click.", getException());
+        logger.error("Failed to process sign in button click.", getException());
         resetControls();
       }
     };

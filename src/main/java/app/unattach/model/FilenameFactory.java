@@ -1,33 +1,47 @@
 package app.unattach.model;
 
+import javafx.fxml.FXML;
+
 import java.security.InvalidParameterException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public class FilenameFactory {
+  private static final Set<String> DEFAULT_LABELS = Set.of(
+      "CATEGORY_FORUMS", "CATEGORY_PERSONAL", "CATEGORY_PROMOTIONS", "CATEGORY_SOCIAL", "CATEGORY_UPDATES",
+      "CHAT", "DRAFT", "IMPORTANT", "INBOX", "SENT", "SPAM", "STARRED", "TRASH", "UNREAD"
+  );
   static final String DEFAULT_SCHEMA = "${ID}-${BODY_PART_INDEX}-${ATTACHMENT_NAME}";
 
   private final Map<String, Pattern> keyToPattern;
   private final String schema;
+  private final Set<String> unattachLabelIds;
 
-  public FilenameFactory(String schema) {
+  public FilenameFactory(String schema, Set<String> unattachLabelIds) {
     keyToPattern = new HashMap<>();
     this.schema = schema;
+    this.unattachLabelIds = unattachLabelIds;
   }
 
   public String getFilename(Email email, int bodyPartIndex, String attachmentName) {
     String template = schema;
+    String name_or_email = email.getFromName().isEmpty() ? email.getFromEmail() : email.getFromName();
     template = replaceRawAndNormalised(template, "FROM_EMAIL", email.getFromEmail(), FilenameFactory::simpleTrim);
     template = replaceRawAndNormalised(template, "FROM_NAME", email.getFromName(), FilenameFactory::simpleTrim);
+    template = replaceRawAndNormalised(template, "FROM_NAME_OR_EMAIL", name_or_email, FilenameFactory::simpleTrim);
     template = replaceRawAndNormalised(template, "SUBJECT", email.getSubject(), FilenameFactory::simpleTrim);
     template = replaceRawAndNormalised(template, "TIMESTAMP", String.valueOf(email.getTimestamp()), FilenameFactory::simpleTrim);
     template = replaceRawAndNormalised(template, "DATE", email.getDateIso8601(), FilenameFactory::simpleTrim);
     template = replaceRawAndNormalised(template, "TIME", email.getTimeString(), FilenameFactory::simpleTrim);
     template = replaceRawAndNormalised(template, "ID", email.getGmailId(), FilenameFactory::simpleTrim);
     template = replaceRawAndNormalised(template, "BODY_PART_INDEX", String.valueOf(bodyPartIndex), FilenameFactory::simpleTrim);
-    template = replaceRawAndNormalised(template, "LABELS", email.getLabelIdsString(), FilenameFactory::simpleTrim);
+    template = replaceRawAndNormalised(template, "LABELS", getLabelIdsString(email), FilenameFactory::simpleTrim);
+    template = replaceRawAndNormalised(template, "LABEL_NAMES", getLabelNamesForFilenames(email), FilenameFactory::simpleTrim);
+    template = replaceRawAndNormalised(template, "CUSTOM_LABEL_NAMES", getCustomLabelNamesForFilenames(email, unattachLabelIds), FilenameFactory::simpleTrim);
     template = replaceRawAndNormalised(template, "ATTACHMENT_NAME", attachmentName, FilenameFactory::basenameTrim);
     if (template.contains("${")) {
       int start = template.indexOf("${");
@@ -46,6 +60,21 @@ public class FilenameFactory {
       keyToPattern.put(key, pattern = Pattern.compile("\\$\\{" + key + "(:([0-9]+))?}"));
     }
     return pattern;
+  }
+
+  public String getLabelIdsString(Email email) {
+    return email.getLabels().stream().map(GmailLabel::id).collect(Collectors.joining("_"));
+  }
+
+  public String getLabelNamesForFilenames(Email email) {
+    return email.getLabels().stream().map(GmailLabel::name).collect(Collectors.joining(", "));
+  }
+
+  private String getCustomLabelNamesForFilenames(Email email, Set<String> unattachLabelIds) {
+    return email.getLabels().stream()
+        .filter(label -> !unattachLabelIds.contains(label.id())).map(GmailLabel::name)
+        .filter(label -> !DEFAULT_LABELS.contains(label))
+        .collect(Collectors.joining(", "));
   }
 
   private interface Trimmer {

@@ -9,6 +9,7 @@
 <?import app.unattach.view.ProgressBarWithText?>
 <?import app.unattach.view.LinkButtonTableCellFactory?>
 <?import app.unattach.view.SelectedCheckBoxTableCellFactory?>
+<?import app.unattach.view.DateTableCellFactory?>
 <VBox xmlns:fx="http://javafx.com/fxml" fx:controller="app.unattach.view.MainViewController" fx:id="root">
   <MenuBar>
     <Menu text="Account">
@@ -19,16 +20,19 @@
     <Menu text="Settings">
       <CheckMenuItem fx:id="signInAutomaticallyCheckMenuItem" text="Sign in automatically"
                      onAction="#onSignInAutomaticallyCheckMenuItemAction"/>
-      <Menu fx:id="viewColumnMenu" text="View Column" />
+      <Menu fx:id="viewColumnMenu" text="View Column"/>
+      <Menu fx:id="dateFormatMenu" text="Date Format"/>
+      <CheckMenuItem fx:id="processEmbeddedCheckMenuItem" text="Process embedded attachments"
+                     onAction="#onProcessEmbeddedCheckMenuItemPressed" />
       <CheckMenuItem fx:id="addMetadataCheckMenuItem" text="Add metadata about removed attachments" selected="true" />
-      <Menu text="After inserting email copy without attachments .." >
-        <CheckMenuItem fx:id="deleteOriginalMenuItem" text="Permanently delete original email" selected="true"
-                       onAction="#onDeleteOriginalMenuItemPressed" />
+      <Menu text="After inserting email copy without attachments..." >
+        <CheckMenuItem fx:id="permanentlyRemoveOriginalMenuItem" text="Permanently remove original email" selected="true"
+                       onAction="#onRemoveOriginalMenuItemPressed" />
         <CheckMenuItem fx:id="trashOriginalMenuItem" text="Trash original email (doesn't free space)"
                        onAction="#onTrashOriginalMenuItemPressed" />
       </Menu>
-      <MenuItem text="File name schema .." onAction="#onFilenameSchemaMenuItemPressed" />
-      <MenuItem text="Gmail labels .." onAction="#onGmailLabelMenuItemPressed" />
+      <MenuItem text="File name schema..." onAction="#onFilenameSchemaMenuItemPressed" />
+      <MenuItem text="Unattach labels..." onAction="#onUnattachLabelMenuItemPressed" />
       <Menu fx:id="donationCurrencyMenu" text="Donation currency" />
     </Menu>
     <Menu text="Help">
@@ -62,7 +66,7 @@
               <ColumnConstraints hgrow="ALWAYS"/>
             </columnConstraints>
             <Label fx:id="labelsListViewLabel" GridPane.rowIndex="1"/>
-            <ListView fx:id="labelsListView" prefHeight="100" GridPane.rowIndex="1" GridPane.columnIndex="1"/>
+            <ListView fx:id="labelsListView" prefHeight="75" GridPane.rowIndex="1" GridPane.columnIndex="1"/>
           </GridPane>
         </Tab>
         <Tab text="Advanced" closable="false">
@@ -97,8 +101,16 @@
 
   <SubView fx:id="resultsSubView" text="Results" VBox.vgrow="ALWAYS">
     <VBox alignment="CENTER" spacing="10">
-      <TableView fx:id="resultsTable" prefHeight="200" VBox.vgrow="ALWAYS">
+      <TableView fx:id="resultsTable" prefHeight="100" minHeight="100" VBox.vgrow="ALWAYS">
         <columns>
+          <TableColumn fx:id="selectedTableColumn" text="Status" styleClass="center">
+            <cellValueFactory>
+              <SelectedCheckBoxTableCellFactory/>
+            </cellValueFactory>
+            <graphic>
+              <CheckBox fx:id="toggleAllEmailsCheckBox"/>
+            </graphic>
+          </TableColumn>
           <TableColumn text="Open" styleClass="center">
             <cellValueFactory>
               <LinkButtonTableCellFactory/>
@@ -106,12 +118,12 @@
           </TableColumn>
           <TableColumn text="Labels" styleClass="center-left">
             <cellValueFactory>
-              <PropertyValueFactory property="labelIdsString"/>
+              <PropertyValueFactory property="labelNamesDelimited"/>
             </cellValueFactory>
           </TableColumn>
           <TableColumn text="Date" styleClass="center">
             <cellValueFactory>
-              <PropertyValueFactory property="date"/>
+              <DateTableCellFactory/>
             </cellValueFactory>
           </TableColumn>
           <TableColumn text="From" styleClass="center-left">
@@ -134,27 +146,14 @@
               <PropertyValueFactory property="sizeInMegaBytes"/>
             </cellValueFactory>
           </TableColumn>
-          <TableColumn text="Attachments">
+          <TableColumn text="Non-embedded Attachments" styleClass="center">
             <cellValueFactory>
               <PropertyValueFactory property="attachments"/>
             </cellValueFactory>
           </TableColumn>
-          <TableColumn fx:id="selectedTableColumn" text="Selected" styleClass="center">
+          <TableColumn text="Process Log" styleClass="center-left">
             <cellValueFactory>
-              <SelectedCheckBoxTableCellFactory/>
-            </cellValueFactory>
-            <graphic>
-              <CheckBox fx:id="toggleAllEmailsCheckBox"/>
-            </graphic>
-          </TableColumn>
-          <TableColumn text="Status" styleClass="center">
-            <cellValueFactory>
-              <PropertyValueFactory property="status"/>
-            </cellValueFactory>
-          </TableColumn>
-          <TableColumn text="Note" styleClass="center-left">
-            <cellValueFactory>
-              <PropertyValueFactory property="note"/>
+              <PropertyValueFactory property="processLog"/>
             </cellValueFactory>
           </TableColumn>
         </columns>
@@ -194,17 +193,17 @@
           </tooltip>
         </Button>
         <Region HBox.hgrow="ALWAYS"/>
-        <Button fx:id="downloadAndDeleteButton" text="Download and delete attachments"
-                onAction="#onDownloadAndDeleteButtonPressed" styleClass="primary">
+        <Button fx:id="downloadAndRemoveButton" text="Download and remove attachments"
+                onAction="#onDownloadAndRemoveButtonPressed" styleClass="primary">
           <tooltip>
-            <Tooltip text="Download attachments to the specified directory and delete them from the emails."/>
+            <Tooltip text="Download attachments to the specified directory and remove them from the emails."/>
           </tooltip>
         </Button>
         <Region HBox.hgrow="ALWAYS"/>
-        <Button fx:id="deleteButton" text="Delete attachments" onAction="#onDeleteButtonPressed"
+        <Button fx:id="removeButton" text="Remove attachments" onAction="#onRemoveButtonPressed"
                 styleClass="primary">
           <tooltip>
-            <Tooltip text="Delete attachments from the emails."/>
+            <Tooltip text="Remove attachments from the emails."/>
           </tooltip>
         </Button>
         <Region HBox.hgrow="ALWAYS"/>
@@ -220,7 +219,6 @@
   </SubView>
 
   <SubView text="Schedule">
-    <VBox alignment="CENTER" spacing="10">
       <HBox alignment="CENTER" spacing="10">
         <CheckBox fx:id="enableScheduleCheckBox">
           <tooltip>
@@ -229,14 +227,11 @@
         </CheckBox>
         <Label fx:id="schedulePeriodPrefixLabel" text="Run current search and last action every" disable="true"/>
         <ComboBox fx:id="schedulePeriodComboBox" disable="true"/>
-        <Label text="."/>
-      </HBox>
-      <HBox alignment="CENTER" spacing="10">
+        <Region HBox.hgrow="ALWAYS"/>
         <Label fx:id="scheduleTimeLabel"/>
         <Button fx:id="stopScheduleButton" text="Stop schedule" onAction="#onStopScheduleButtonPressed" disable="true"
                 styleClass="danger"/>
       </HBox>
-    </VBox>
   </SubView>
 
   <stylesheets>

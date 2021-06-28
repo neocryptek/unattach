@@ -1,18 +1,24 @@
 package app.unattach.model;
 
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.security.InvalidParameterException;
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 public class FilenameFactoryTest {
-  private static final Email email = new Email("id3", "uid42", Arrays.asList("SENT", "IMPORTANT"),
-      "\"Rok Strniša\" <rok.strnisa@gmail.com>", "to@example.com", "subject", 1501545600000L,
-      32141, Collections.singletonList("data.zip"));
+  private Email email;
+
+  @BeforeEach
+  public void setUp() {
+    email = createEmail("\"Rok Strniša\" <rok.strnisa@gmail.com>");
+  }
 
   @Test
   public void testFromEmail() {
@@ -24,6 +30,15 @@ public class FilenameFactoryTest {
   public void testFromName() {
     testGetFilename("${FROM_NAME}", "a%b@.jpg", "Rok_Strni_a");
     testGetFilename("${FROM_NAME:3}", "a%b@.jpg", "Rok");
+  }
+
+  @Test
+  public void testFromNameOrEmail() {
+    testGetFilename("${FROM_NAME_OR_EMAIL}", "a%b@.jpg", "Rok_Strni_a");
+    testGetFilename("${FROM_NAME_OR_EMAIL:3}", "a%b@.jpg", "Rok");
+    email = createEmail("rok.strnisa@gmail.com");
+    testGetFilename("${FROM_NAME_OR_EMAIL}", "a%b@.jpg", "rok.strnisa@gmail.com");
+    testGetFilename("${FROM_NAME_OR_EMAIL:5}", "a%b@.jpg", "rok.s");
   }
 
   @Test
@@ -80,16 +95,39 @@ public class FilenameFactoryTest {
 
   @Test
   public void testLabels() {
-    testGetFilename("${LABELS}", "a%b@.jpg", "IMPORTANT_SENT");
+    testGetFilename("${LABELS}", "a%b@.jpg", "LABEL_42_IMPORTANT_LABEL_13");
   }
 
-  @Test(expected = InvalidParameterException.class)
+  @Test
+  public void testLabelNames() {
+    testGetFilename("${LABEL_NAMES}", "a%b@.jpg",
+        "Friends__Files__IMPORTANT__Unattach_-_Downloaded");
+  }
+
+  @Test
+  public void testCustomLabelNames() {
+    testGetFilename("${CUSTOM_LABEL_NAMES}", "a%b@.jpg", "Friends__Files");
+  }
+
+  @Test
   public void testUnknownPlaceholder() {
-    testGetFilename("${FOO}", "a%b@.jpg", "a%b@.jpg");
+    assertThrows(InvalidParameterException.class, () ->
+        testGetFilename("${FOO}", "a%b@.jpg", "a%b@.jpg")
+    );
   }
 
-  private static void testGetFilename(String schema, String attachmentName, String expectedFilename) {
-    FilenameFactory filenameFactory = new FilenameFactory(schema);
+  private static Email createEmail(String from) {
+    List<GmailLabel> labels = Arrays.asList(
+        new GmailLabel("IMPORTANT", "IMPORTANT"),
+        new GmailLabel("LABEL_13", "Unattach - Downloaded"),
+        new GmailLabel("LABEL_42", "Friends' Files"));
+    return new Email("id3", "uid42", labels,
+        from, "to@example.com", "subject", 1501545600000L,
+        32141, Collections.singletonList("data.zip"));
+  }
+
+  private void testGetFilename(String schema, String attachmentName, String expectedFilename) {
+    FilenameFactory filenameFactory = new FilenameFactory(schema, Set.of("LABEL_13"));
     String actualFilename = filenameFactory.getFilename(email, 234, attachmentName);
     assertEquals(expectedFilename, actualFilename);
   }

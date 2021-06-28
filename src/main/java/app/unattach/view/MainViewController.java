@@ -4,6 +4,8 @@ import app.unattach.controller.Controller;
 import app.unattach.controller.ControllerFactory;
 import app.unattach.controller.LongTask;
 import app.unattach.model.*;
+import app.unattach.model.service.GmailServiceException;
+import app.unattach.utils.Logger;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.application.Platform;
@@ -21,6 +23,7 @@ import javafx.stage.DirectoryChooser;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.util.Duration;
+import org.apache.commons.lang3.SystemUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.commons.lang3.time.DurationFormatUtils;
 
@@ -30,13 +33,13 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static app.unattach.view.Action.*;
+
 public class MainViewController {
-  private static final Logger LOGGER = Logger.getLogger(MainViewController.class.getName());
+  private static final Logger logger = Logger.get();
 
   private Controller controller;
   @FXML
@@ -54,7 +57,11 @@ public class MainViewController {
   @FXML
   private Menu viewColumnMenu;
   @FXML
-  private CheckMenuItem deleteOriginalMenuItem;
+  private Menu dateFormatMenu;
+  @FXML
+  private CheckMenuItem processEmbeddedCheckMenuItem;
+  @FXML
+  private CheckMenuItem permanentlyRemoveOriginalMenuItem;
   @FXML
   private CheckMenuItem trashOriginalMenuItem;
   @FXML
@@ -115,9 +122,9 @@ public class MainViewController {
   @FXML
   private Button downloadButton;
   @FXML
-  private Button downloadAndDeleteButton;
+  private Button downloadAndRemoveButton;
   @FXML
-  private Button deleteButton;
+  private Button removeButton;
   @FXML
   private Button stopProcessingButton;
   @FXML
@@ -141,12 +148,14 @@ public class MainViewController {
   private Timeline timeline;
 
   @FXML
-  private void initialize() throws IOException {
+  private void initialize() throws GmailServiceException {
     controller = ControllerFactory.getDefaultController();
     emailMenuItem.setText("Signed in as " + controller.getEmailAddress() + ".");
     signInAutomaticallyCheckMenuItem.setSelected(controller.getConfig().getSignInAutomatically());
     addMenuForHidingColumns();
-    if (!controller.getConfig().getDeleteOriginal()) {
+    addMenuForDateFormats();
+    processEmbeddedCheckMenuItem.setSelected(controller.getConfig().getProcessEmbedded());
+    if (!controller.getConfig().getRemoveOriginal()) {
       onTrashOriginalMenuItemPressed();
     }
     List<CheckMenuItem> currencyMenuItems =
@@ -162,7 +171,7 @@ public class MainViewController {
     emailSizeComboBox.setItems(FXCollections.observableList(getEmailSizeOptions()));
     int emailSize = controller.getConfig().getEmailSize();
     int emailSizeIndex = IntStream.range(0, emailSizeComboBox.getItems().size())
-        .filter(i -> emailSizeComboBox.getItems().get(i).value.equals(emailSize))
+        .filter(i -> emailSizeComboBox.getItems().get(i).value().equals(emailSize))
         .findFirst().orElse(1);
     emailSizeComboBox.getSelectionModel().select(emailSizeIndex);
     searchQueryTextField.setText(controller.getConfig().getSearchQuery());
@@ -175,14 +184,19 @@ public class MainViewController {
     targetDirectoryTextField.setText(controller.getConfig().getTargetDirectory());
     processingProgressBarWithText.progressProperty().setValue(0);
     processingProgressBarWithText.textProperty().setValue("(Processing of emails not started yet.)");
-    labelsListViewLabel.setText("Email labels:\n(If selecting multiple, results will match any.)");
+    labelsListViewLabel.setText("""
+        Your Gmail labels (optional):
+        - Each result will have at least one selected label.
+        - Select no labels to ignore this filter.
+        - %s-click on a label to unselect it.""".formatted(SystemUtils.IS_OS_MAC ? "⌘" : "Ctrl"));
     labelsListView.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
     List<GmailLabel> labels = controller.getIdToLabel().entrySet().stream()
-        .map(e -> new GmailLabel(e.getKey(), e.getValue())).sorted(Comparator.comparing(GmailLabel::getName))
+        .map(e -> new GmailLabel(e.getKey(), e.getValue())).sorted(Comparator.comparing(GmailLabel::name))
         .collect(Collectors.toList());
     labelsListView.setItems(FXCollections.observableList(labels));
     selectSavedLabels(labels);
     saveLabelsOnChange();
+    resultsTable.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
     enableScheduleCheckBox.selectedProperty()
         .addListener((checkBox, previous, current) -> onEnableScheduleCheckBoxChange());
     schedulePeriodComboBox.setItems(FXCollections.observableList(Arrays.asList(
@@ -209,8 +223,29 @@ public class MainViewController {
     });
   }
 
+  private void addMenuForDateFormats() {
+    String pattern = controller.getConfig().getDateFormat();
+    for (DateFormat dateFormat : DateFormat.values()) {
+      CheckMenuItem menuItem = new CheckMenuItem(dateFormat.getPattern());
+      if (dateFormat.getPattern().equals(pattern)) {
+        menuItem.setSelected(true);
+      }
+      menuItem.setOnAction(this::onDateFormatMenuItemPressed);
+      dateFormatMenu.getItems().add(menuItem);
+    }
+  }
+
+  private void onDateFormatMenuItemPressed(ActionEvent event) {
+    dateFormatMenu.getItems().stream().map(CheckMenuItem.class::cast).forEach(e -> e.setSelected(false));
+    CheckMenuItem checkMenuItem = (CheckMenuItem) event.getSource();
+    checkMenuItem.setSelected(true);
+    String pattern = checkMenuItem.getText();
+    controller.getConfig().saveDateFormat(pattern);
+    resultsTable.refresh();
+  }
+
   private void selectSavedLabels(List<GmailLabel> labels) {
-    Map<String, GmailLabel> idToIdLabel = labels.stream().collect(Collectors.toMap(GmailLabel::getId, Function.identity()));
+    Map<String, GmailLabel> idToIdLabel = labels.stream().collect(Collectors.toMap(GmailLabel::id, Function.identity()));
     controller.getConfig().getLabelIds().stream().map(idToIdLabel::get).filter(Objects::nonNull).
         forEach(labelsListView.getSelectionModel()::select);
   }
@@ -218,7 +253,7 @@ public class MainViewController {
   private void saveLabelsOnChange() {
     labelsListView.getSelectionModel().getSelectedItems().addListener((ListChangeListener<GmailLabel>) change -> {
       List<String> labelIds = labelsListView.getSelectionModel().getSelectedItems()
-          .stream().map(GmailLabel::getId).collect(Collectors.toList());
+          .stream().map(GmailLabel::id).collect(Collectors.toList());
       controller.getConfig().saveLabelIds(labelIds);
     });
   }
@@ -241,6 +276,11 @@ public class MainViewController {
   @FXML
   private void onSignInAutomaticallyCheckMenuItemAction() {
     controller.getConfig().saveSignInAutomatically(signInAutomaticallyCheckMenuItem.isSelected());
+  }
+
+  @FXML
+  private void onProcessEmbeddedCheckMenuItemPressed() {
+    controller.getConfig().saveProcessEmbedded(processEmbeddedCheckMenuItem.isSelected());
   }
 
   @FXML
@@ -271,7 +311,6 @@ public class MainViewController {
     resultsSubView.setText("Results");
     stopSearchButton.setDisable(false);
     stopSearchButtonPressed = false;
-    controller.clearPreviousSearch();
     resultsTable.setItems(FXCollections.emptyObservableList());
     AtomicInteger currentBatch = new AtomicInteger();
     AtomicInteger numberOfBatches = new AtomicInteger();
@@ -280,19 +319,18 @@ public class MainViewController {
       @Override
       protected Void call() throws Exception {
         updateProgress(0, 1);
-        updateMessage("Obtaining email metadata ..");
+        updateMessage("Getting info about emails...");
         String query = getQuery();
-        LOGGER.info("Obtaining email metadata (query: " + query + ") ..");
         GetEmailMetadataTask longTask = controller.getSearchTask(query);
         currentBatch.set(0);
         numberOfBatches.set(longTask.getNumberOfSteps());
         updateProgress(currentBatch.get(), numberOfBatches.get());
-        updateMessage(String.format("Obtaining email metadata (%s) ..", getStatusString()));
+        updateMessage(String.format("Getting info about emails (%s)...", getStatusString()));
         while (!stopSearchButtonPressed && longTask.hasMoreSteps()) {
           GetEmailMetadataTask.Result result = longTask.takeStep();
-          currentBatch.set(result.currentBatchNumber);
+          currentBatch.set(result.currentBatchNumber());
           updateProgress(currentBatch.get(), numberOfBatches.get());
-          updateMessage(String.format("Obtaining email metadata (%s) ..", getStatusString()));
+          updateMessage(String.format("Getting info about emails (%s)...", getStatusString()));
         }
         return null;
       }
@@ -310,15 +348,17 @@ public class MainViewController {
       protected void succeeded() {
         boolean successful = false;
         try {
-          updateMessage(String.format("Finished obtaining email metadata (%s).", getStatusString()));
-          List<Email> emails = controller.getEmails();
+          String message = "Finished getting info about emails (%s).".formatted(getStatusString());
+          logger.info(message);
+          updateMessage(message);
+          List<Email> emails = controller.getSearchResults();
           ObservableList<Email> observableEmails = FXCollections.observableList(emails, email -> new Observable[]{email});
           resultsTable.setItems(observableEmails);
           updateResultsCaption();
           observableEmails.addListener((ListChangeListener<? super Email>) change -> updateResultsCaption());
           successful = true;
         } catch (Throwable t) {
-          String message = "Failed to process email metadata.";
+          String message = "Failed to get email info.";
           updateMessage(message);
           reportError(message, t);
         } finally {
@@ -331,7 +371,7 @@ public class MainViewController {
 
       @Override
       protected void failed() {
-        String message = "Failed to obtain email metadata.";
+        String message = "Failed to get email info.";
         updateMessage(message);
         reportError(message, getException());
         resetControls();
@@ -361,7 +401,7 @@ public class MainViewController {
   }
 
   private void reportError(String message, Throwable t) {
-    LOGGER.log(Level.SEVERE, message, t);
+    logger.error(message, t);
     String stackTraceText = ExceptionUtils.getStackTrace(t);
     controller.sendToServer("stack trace", stackTraceText, null);
   }
@@ -373,9 +413,9 @@ public class MainViewController {
 
   @FXML
   private void onToggleAllEmailsCheckBoxChange() {
-    EmailStatus targetStatus = toggleAllEmailsCheckBox.isSelected() ? EmailStatus.TO_PROCESS : EmailStatus.IGNORED;
+    EmailStatus targetStatus = toggleAllEmailsCheckBox.isSelected() ? EmailStatus.TO_PROCESS : EmailStatus.NOT_SELECTED;
     resultsTable.getItems().forEach(email -> {
-      if (email.getStatus() == EmailStatus.IGNORED || email.getStatus() == EmailStatus.TO_PROCESS) {
+      if (email.getStatus() == EmailStatus.NOT_SELECTED || email.getStatus() == EmailStatus.TO_PROCESS) {
         email.setStatus(targetStatus);
       }
     });
@@ -387,12 +427,12 @@ public class MainViewController {
   private String getQuery() {
     StringBuilder query = new StringBuilder();
     if (basicSearchTab.isSelected()) {
-      int minEmailSizeInMb = emailSizeComboBox.getSelectionModel().getSelectedItem().value;
+      int minEmailSizeInMb = emailSizeComboBox.getSelectionModel().getSelectedItem().value();
       query.append(String.format("has:attachment size:%dm", minEmailSizeInMb));
       ObservableList<GmailLabel> labels = labelsListView.getSelectionModel().getSelectedItems();
       if (!labels.isEmpty()) {
         query.append(" {");
-        query.append(labels.stream().map(label -> String.format("label:\"%s\"", label.getName()))
+        query.append(labels.stream().map(label -> String.format("label:\"%s\"", label.name()))
                 .collect(Collectors.joining(" ")));
         query.append("}");
       }
@@ -422,7 +462,7 @@ public class MainViewController {
   private void onOpenButtonPressed() {
     File targetDirectory = getTargetDirectory();
     if (targetDirectory.mkdirs()) {
-      LOGGER.info("Created directory \"" + targetDirectory.getAbsolutePath() + "\".");
+      logger.info("Created directory \"" + targetDirectory.getAbsolutePath() + "\".");
     }
     controller.openFile(targetDirectory);
   }
@@ -434,28 +474,29 @@ public class MainViewController {
   @FXML
   private void onDownloadButtonPressed() {
     String downloadedLabelId = controller.getOrCreateDownloadedLabelId();
-    ProcessOption processOption = new ProcessOption(Action.DOWNLOAD, backupCheckBox.isSelected(), true,
-        false, false, downloadedLabelId, null);
+    String removedLabelId = controller.getOrCreateRemovedLabelId();
+    ProcessOption processOption = new ProcessOption(DOWNLOAD, processEmbeddedCheckMenuItem.isSelected(),
+        backupCheckBox.isSelected(), false, downloadedLabelId, removedLabelId);
     processEmails(processOption);
   }
 
   @FXML
-  private void onDownloadAndDeleteButtonPressed() {
-    boolean deleteOriginal = deleteOriginalMenuItem.isSelected();
+  private void onDownloadAndRemoveButtonPressed() {
+    boolean permanentlyRemoveOriginal = permanentlyRemoveOriginalMenuItem.isSelected();
     String downloadedLabelId = controller.getOrCreateDownloadedLabelId();
     String removedLabelId = controller.getOrCreateRemovedLabelId();
-    ProcessOption processOption = new ProcessOption(Action.DOWNLOAD_AND_DELETE, backupCheckBox.isSelected(),
-        true, true, deleteOriginal, downloadedLabelId, removedLabelId);
+    ProcessOption processOption = new ProcessOption(DOWNLOAD_AND_REMOVE, processEmbeddedCheckMenuItem.isSelected(),
+        backupCheckBox.isSelected(), permanentlyRemoveOriginal, downloadedLabelId, removedLabelId);
     processEmails(processOption);
   }
 
   @FXML
-  private void onDeleteButtonPressed() {
-    boolean deleteOriginal = deleteOriginalMenuItem.isSelected();
+  private void onRemoveButtonPressed() {
+    boolean permanentlyRemoveOriginal = permanentlyRemoveOriginalMenuItem.isSelected();
     String downloadedLabelId = controller.getOrCreateDownloadedLabelId();
     String removedLabelId = controller.getOrCreateRemovedLabelId();
-    ProcessOption processOption = new ProcessOption(Action.DELETE, backupCheckBox.isSelected(),
-        false, true, deleteOriginal, downloadedLabelId, removedLabelId);
+    ProcessOption processOption = new ProcessOption(REMOVE, processEmbeddedCheckMenuItem.isSelected(),
+        backupCheckBox.isSelected(), permanentlyRemoveOriginal, downloadedLabelId, removedLabelId);
     processEmails(processOption);
   }
 
@@ -465,6 +506,8 @@ public class MainViewController {
       showNoEmailsAlert();
       return;
     }
+    logger.info("Processing %d emails with %s and filename schema '%s'...", emailsToProcess.size(), processOption,
+        controller.getConfig().getFilenameSchema());
     disableControls();
     stopProcessingButton.setDisable(false);
     stopProcessingButtonPressed = false;
@@ -489,18 +532,21 @@ public class MainViewController {
   }
 
   private void processEmail(List<Email> emailsToProcess, int nextEmailIndex, int failed, ProcessSettings processSettings) {
+    String processingStatusString = getProcessingStatusString(emailsToProcess, nextEmailIndex, failed);
     if (stopProcessingButtonPressed || nextEmailIndex >= emailsToProcess.size()) {
-      processingProgressBarWithText.textProperty().setValue(
-          String.format("Processing stopped (%s).", getProcessingStatusString(emailsToProcess, nextEmailIndex, failed)));
+      String message = "Processing stopped (%s).".formatted(processingStatusString);
+      logger.info(message);
+      processingProgressBarWithText.textProperty().setValue(message);
       resetControls();
       if (enableScheduleCheckBox.isSelected()) {
-        scheduleNextRun(processSettings.getProcessOption().getAction());
+        scheduleNextRun(processSettings.processOption().action());
       }
       return;
     }
     Email email = emailsToProcess.get(nextEmailIndex);
+    logger.info("Processing email with subject '%s'...", email.getSubject());
     processingProgressBarWithText.textProperty().setValue(
-        String.format("Processing selected emails (%s) ..", getProcessingStatusString(emailsToProcess, nextEmailIndex, failed)));
+        "Processing selected emails (%s)...".formatted(processingStatusString));
 
     Task<ProcessEmailResult> task = new Task<>() {
       @Override
@@ -517,8 +563,8 @@ public class MainViewController {
       protected void succeeded() {
         ProcessEmailResult processEmailResult = getValue();
         if (processEmailResult != null) {
-          if (processEmailResult.getNewUniqueId() != null) {
-            email.setUniqueId(processEmailResult.getNewUniqueId());
+          if (processEmailResult.newUniqueId() != null) {
+            email.setUniqueId(processEmailResult.newUniqueId());
           }
           bytesProcessed += email.getSizeInBytes();
           processingProgressBarWithText.progressProperty().setValue(1.0 * bytesProcessed / allBytesToProcess);
@@ -530,7 +576,7 @@ public class MainViewController {
       @Override
       protected void failed() {
         email.setStatus(EmailStatus.FAILED);
-        email.setNote(getException().getMessage());
+        email.setProcessLog(getException().getMessage());
         resultsTable.refresh();
         reportError("Failed to process selected emails.", getException());
         processEmail(emailsToProcess, nextEmailIndex + 1, failed + 1, processSettings);
@@ -542,7 +588,7 @@ public class MainViewController {
 
   private String getProcessingStatusString(List<Email> emailsToProcess, int nextEmailIndex, int failed) {
     return String.format("processed %d of %d, %dMB / %dMB, %d%% by size, %d failed",
-        nextEmailIndex - failed, emailsToProcess.size(), toMegaBytes(bytesProcessed), toMegaBytes(allBytesToProcess),
+        nextEmailIndex, emailsToProcess.size(), toMegaBytes(bytesProcessed), toMegaBytes(allBytesToProcess),
         allBytesToProcess == 0 ? 0 : 100 * bytesProcessed / allBytesToProcess, failed);
   }
 
@@ -572,8 +618,8 @@ public class MainViewController {
     browseButton.setDisable(true);
     backupCheckBox.setDisable(true);
     downloadButton.setDisable(true);
-    downloadAndDeleteButton.setDisable(true);
-    deleteButton.setDisable(true);
+    downloadAndRemoveButton.setDisable(true);
+    removeButton.setDisable(true);
     stopProcessingButton.setDisable(true);
   }
 
@@ -589,8 +635,8 @@ public class MainViewController {
     browseButton.setDisable(false);
     backupCheckBox.setDisable(false);
     downloadButton.setDisable(false);
-    downloadAndDeleteButton.setDisable(false);
-    deleteButton.setDisable(false);
+    downloadAndRemoveButton.setDisable(false);
+    removeButton.setDisable(false);
     stopProcessingButton.setDisable(true);
   }
 
@@ -627,7 +673,7 @@ public class MainViewController {
       File homeFile = new File(home);
       File[] logFiles = homeFile.listFiles(file -> {
         String name = file.getName();
-        return name.startsWith(".unattach-") && name.endsWith(".log");
+        return name.startsWith(".unattach") && name.endsWith(".log");
       });
       long latestTimestamp = 0;
       File latest = null;
@@ -647,17 +693,17 @@ public class MainViewController {
   }
 
   @FXML
-  private void onDeleteOriginalMenuItemPressed() {
-    deleteOriginalMenuItem.setSelected(true);
+  private void onRemoveOriginalMenuItemPressed() {
+    permanentlyRemoveOriginalMenuItem.setSelected(true);
     trashOriginalMenuItem.setSelected(false);
-    controller.getConfig().setDeleteOriginal(true);
+    controller.getConfig().saveRemoveOriginal(true);
   }
 
   @FXML
   private void onTrashOriginalMenuItemPressed() {
-    deleteOriginalMenuItem.setSelected(false);
+    permanentlyRemoveOriginalMenuItem.setSelected(false);
     trashOriginalMenuItem.setSelected(true);
-    controller.getConfig().setDeleteOriginal(false);
+    controller.getConfig().saveRemoveOriginal(false);
   }
 
   @FXML
@@ -677,7 +723,7 @@ public class MainViewController {
       dialog.setScene(scene);
       Scenes.showAndPreventMakingSmaller(dialog);
     } catch (IOException e) {
-      LOGGER.log(Level.SEVERE, "Failed to open the file name scheme dialog.", e);
+      logger.error("Failed to open the file name scheme dialog.", e);
     }
   }
 
@@ -688,20 +734,20 @@ public class MainViewController {
 
   @FXML
   private void onEmailSizeComboBoxChanged() {
-    controller.getConfig().saveEmailSize(emailSizeComboBox.getValue().value);
+    controller.getConfig().saveEmailSize(emailSizeComboBox.getValue().value());
   }
 
   @FXML
-  private void onGmailLabelMenuItemPressed() {
+  private void onUnattachLabelMenuItemPressed() {
     try {
-      Stage dialog = Scenes.createNewStage(Constants.PRODUCT_NAME + " : Gmail label");
+      Stage dialog = Scenes.createNewStage(Constants.PRODUCT_NAME + " : Unattach labels");
       dialog.initOwner(root.getScene().getWindow());
       dialog.initModality(Modality.APPLICATION_MODAL);
-      Scene scene = Scenes.loadScene("/gmail-label.view.fxml");
+      Scene scene = Scenes.loadScene("/unattach-labels.view.fxml");
       dialog.setScene(scene);
       Scenes.showAndPreventMakingSmaller(dialog);
     } catch (IOException e) {
-      LOGGER.log(Level.SEVERE, "Failed to open the gmail label dialog.", e);
+      logger.error("Failed to open the Unattach labels dialog.", e);
     }
   }
 
@@ -728,22 +774,6 @@ public class MainViewController {
     return selectedCurrencyMenu.isEmpty() ? null : selectedCurrencyMenu.get().getText();
   }
 
-  @SuppressWarnings("unused")
-  private void showThankYouDialog() {
-    try {
-      Stage dialog = Scenes.createNewStage("Thank you");
-      dialog.initOwner(root.getScene().getWindow());
-      dialog.initModality(Modality.APPLICATION_MODAL);
-      Scene scene = Scenes.loadScene("/thank-you.view.fxml");
-      ThankYouViewController thankYouViewController = (ThankYouViewController) scene.getUserData();
-      thankYouViewController.setOnSubmitFeedbackCallback(this::onFeedbackMenuItemPressed);
-      dialog.setScene(scene);
-      Scenes.showAndPreventMakingSmaller(dialog);
-    } catch (IOException e) {
-      LOGGER.log(Level.SEVERE, "Failed to open the thank you dialog.", e);
-    }
-  }
-
   private void onEnableScheduleCheckBoxChange() {
     boolean enabled = enableScheduleCheckBox.isSelected();
     schedulePeriodPrefixLabel.setDisable(!enabled);
@@ -754,7 +784,7 @@ public class MainViewController {
     stopAnyRunningSchedule();
     stopScheduleButton.setDisable(false);
     SchedulePeriod schedulePeriod = schedulePeriodComboBox.getSelectionModel().getSelectedItem();
-    LocalDateTime nextRunTime = LocalDateTime.now().plusSeconds(schedulePeriod.getSeconds());
+    LocalDateTime nextRunTime = LocalDateTime.now().plusSeconds(schedulePeriod.seconds());
     timeline = new Timeline(new KeyFrame(Duration.ZERO, event -> {
       LocalDateTime now = LocalDateTime.now();
       if (now.isAfter(nextRunTime)) {
@@ -778,8 +808,8 @@ public class MainViewController {
       toggleAllEmailsCheckBox.setSelected(true);
       switch (action) {
         case DOWNLOAD -> onDownloadButtonPressed();
-        case DELETE -> onDeleteButtonPressed();
-        case DOWNLOAD_AND_DELETE -> onDownloadAndDeleteButtonPressed();
+        case REMOVE -> onRemoveButtonPressed();
+        case DOWNLOAD_AND_REMOVE -> onDownloadAndRemoveButtonPressed();
       }
     });
   }

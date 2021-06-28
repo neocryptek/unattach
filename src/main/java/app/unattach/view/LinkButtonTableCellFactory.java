@@ -13,7 +13,8 @@ import java.net.URLEncoder;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
-public class LinkButtonTableCellFactory implements Callback<TableColumn.CellDataFeatures<Email, Button>, ObservableValue<Button>> {
+public class LinkButtonTableCellFactory
+    implements Callback<TableColumn.CellDataFeatures<Email, Button>, ObservableValue<Button>> {
   private final Controller controller;
 
   public LinkButtonTableCellFactory() {

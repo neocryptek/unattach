@@ -1,6 +1,7 @@
 package app.unattach.view;
 
 import app.unattach.model.Constants;
+import app.unattach.utils.Logger;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
@@ -12,6 +13,8 @@ import java.io.IOException;
 public enum Scenes {
   MAIN, SIGN_IN;
 
+  private static final Logger logger = Logger.get();
+
   private static Stage stage;
 
   public static void init(Stage stage) {
@@ -19,6 +22,7 @@ public enum Scenes {
   }
 
   public static void setScene(Scenes scenes) throws IOException {
+    logger.info("Setting scene %s...", scenes);
     Scene scene = switch (scenes) {
       case MAIN -> loadScene("/main.view.fxml");
       case SIGN_IN -> loadScene("/sign-in.view.fxml");

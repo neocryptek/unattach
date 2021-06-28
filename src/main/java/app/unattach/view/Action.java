@@ -2,8 +2,8 @@ package app.unattach.view;
 
 public enum Action {
   DOWNLOAD("download"),
-  DELETE("delete"),
-  DOWNLOAD_AND_DELETE("download and delete");
+  REMOVE("remove"),
+  DOWNLOAD_AND_REMOVE("download and remove");
 
   private final String name;
 

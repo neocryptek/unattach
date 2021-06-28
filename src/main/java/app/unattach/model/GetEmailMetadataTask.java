@@ -2,22 +2,16 @@ package app.unattach.model;
 
 import app.unattach.controller.LongTask;
 import app.unattach.controller.LongTaskException;
+import app.unattach.model.service.GmailServiceException;
 
-import java.io.IOException;
 import java.util.List;
 
 public class GetEmailMetadataTask implements LongTask<GetEmailMetadataTask.Result> {
   interface Worker {
-    void getEmailMetadata(int startIndexInclusive, int endIndexExclusive) throws IOException;
+    void getEmailMetadata(int startIndexInclusive, int endIndexExclusive) throws GmailServiceException;
   }
 
-  public static class Result {
-    public final int currentBatchNumber;
-
-    Result(int currentBatchNumber) {
-      this.currentBatchNumber = currentBatchNumber;
-    }
-  }
+  public static record Result(int currentBatchNumber) {}
 
   private final List<String> emailIds;
   // (maximum batch size = 100)

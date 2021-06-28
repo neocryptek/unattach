@@ -4,15 +4,15 @@
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
 <?import java.net.URL?>
-<VBox xmlns:fx="http://javafx.com/fxml" fx:controller="app.unattach.view.GmailLabelController"
+<VBox xmlns:fx="http://javafx.com/fxml" fx:controller="app.unattach.view.UnattachLabelsController"
       alignment="CENTER" spacing="10">
   <padding><Insets top="10" right="10" bottom="10" left="10"/></padding>
   <GridPane VBox.vgrow="ALWAYS" vgap="10" hgap="10">
     <Label fx:id="introductionLabel" GridPane.columnSpan="2" />
-    <Label text="Download label to use:" GridPane.rowIndex="1" textAlignment="RIGHT"/>
-    <ComboBox fx:id="downloadLabelComboBox" GridPane.rowIndex="1" GridPane.columnIndex="1"/>
-    <Label text="Remove label to use:" GridPane.rowIndex="2" textAlignment="RIGHT"/>
-    <ComboBox fx:id="removeLabelComboBox" GridPane.rowIndex="2" GridPane.columnIndex="1"/>
+    <Label text="Downloaded label to use:" GridPane.rowIndex="1" textAlignment="RIGHT"/>
+    <ComboBox fx:id="downloadedLabelComboBox" GridPane.rowIndex="1" GridPane.columnIndex="1"/>
+    <Label text="Removed label to use:" GridPane.rowIndex="2" textAlignment="RIGHT"/>
+    <ComboBox fx:id="removedLabelComboBox" GridPane.rowIndex="2" GridPane.columnIndex="1"/>
     <Label fx:id="customizeLabel" GridPane.rowIndex="3" GridPane.columnSpan="2" />
     <columnConstraints>
       <ColumnConstraints hgrow="NEVER"/>

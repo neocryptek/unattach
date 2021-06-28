@@ -7,15 +7,8 @@ interface EmailProcessorFunctor {
   ProcessEmailResult processEmail(Email email) throws Exception;
 }
 
-class ProcessEmailTask implements LongTask<ProcessEmailResult> {
-  private final Email email;
-  private final EmailProcessorFunctor processEmailFunction;
-
-  ProcessEmailTask(Email email, EmailProcessorFunctor processEmailFunction) {
-    this.email = email;
-    this.processEmailFunction = processEmailFunction;
-  }
-
+record ProcessEmailTask(Email email, EmailProcessorFunctor processEmailFunction)
+    implements LongTask<ProcessEmailResult> {
   @Override
   public int getNumberOfSteps() {
     return 1;

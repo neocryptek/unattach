@@ -1,4 +1,4 @@
-package app.unattach.model;
+package app.unattach.model.service;
 
 import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.extensions.java6.auth.oauth2.AuthorizationCodeInstalledApp;
@@ -21,18 +21,37 @@ import java.security.GeneralSecurityException;
 import java.util.Collections;
 import java.util.List;
 
-class GmailServiceLifecycleManager {
+public class LiveGmailServiceManager implements GmailServiceManager {
   private static final String GOOGLE_APPLICATION_NAME = "Unattach";
   private static final File DATA_STORE_DIR = new File(System.getProperty("user.home"), ".credentials/unattach");
   private static final JsonFactory JSON_FACTORY = JacksonFactory.getDefaultInstance();
   private static final List<String> SCOPES = Collections.singletonList(GmailScopes.MAIL_GOOGLE_COM);
 
-  private FileDataStoreFactory DATA_STORE_FACTORY;
-  private HttpTransport HTTP_TRANSPORT;
+  private FileDataStoreFactory dataStoreFactory;
+  private HttpTransport httpTransport;
 
-  GmailServiceLifecycleManager() throws GeneralSecurityException, IOException {
-    HTTP_TRANSPORT = GoogleNetHttpTransport.newTrustedTransport();
-    DATA_STORE_FACTORY = new FileDataStoreFactory(DATA_STORE_DIR);
+  @Override
+  public GmailService signIn() throws GmailServiceManagerException {
+    try {
+      httpTransport = GoogleNetHttpTransport.newTrustedTransport();
+      dataStoreFactory = new FileDataStoreFactory(DATA_STORE_DIR);
+      Credential credential = authorize();
+      Gmail gmail = new Gmail.Builder(httpTransport, JSON_FACTORY, setHttpTimeout(credential))
+          .setApplicationName(GOOGLE_APPLICATION_NAME)
+          .build();
+      return new LiveGmailService(gmail);
+    } catch (GeneralSecurityException | IOException e) {
+      throw new GmailServiceManagerException(e);
+    }
+  }
+
+  @Override
+  public void signOut() throws GmailServiceManagerException {
+    try {
+      FileUtils.deleteDirectory(DATA_STORE_DIR);
+    } catch (IOException e) {
+      throw new GmailServiceManagerException(e);
+    }
   }
 
   private HttpRequestInitializer setHttpTimeout(final HttpRequestInitializer requestInitializer) {
@@ -43,24 +62,13 @@ class GmailServiceLifecycleManager {
     };
   }
 
-  Gmail signIn() throws IOException {
-    Credential credential = authorize();
-    return new Gmail.Builder(HTTP_TRANSPORT, JSON_FACTORY, setHttpTimeout(credential))
-        .setApplicationName(GOOGLE_APPLICATION_NAME)
-        .build();
-  }
-
-  void signOut() throws IOException {
-    FileUtils.deleteDirectory(DATA_STORE_DIR);
-  }
-
   private Credential authorize() throws IOException {
     try (InputStreamReader reader = new InputStreamReader(getClass().getResourceAsStream("/credentials.json"))) {
       GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(JSON_FACTORY, reader);
       GoogleAuthorizationCodeFlow flow =
           new GoogleAuthorizationCodeFlow.Builder(
-              HTTP_TRANSPORT, JSON_FACTORY, clientSecrets, SCOPES)
-              .setDataStoreFactory(DATA_STORE_FACTORY)
+              httpTransport, JSON_FACTORY, clientSecrets, SCOPES)
+              .setDataStoreFactory(dataStoreFactory)
               .setAccessType("offline")
               .build();
       return new AuthorizationCodeInstalledApp(flow, new LocalServerReceiver()).authorize("user");

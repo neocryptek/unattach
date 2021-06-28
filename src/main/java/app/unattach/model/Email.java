@@ -7,11 +7,12 @@ import org.apache.commons.lang3.StringUtils;
 
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class Email implements Observable {
   private final String gmailId;
   private String uniqueId;
-  private final SortedSet<String> labelIds;
+  private final SortedSet<GmailLabel> labels;
   private final String from;
   private final String to;
   private final String subject;
@@ -20,15 +21,16 @@ public class Email implements Observable {
   private final int sizeInBytes;
   private final List<String> attachments;
   private EmailStatus status;
-  private String note;
+  private String processLog;
 
   private final List<InvalidationListener> listeners = new ArrayList<>();
 
-  public Email(String gmailId, String uniqueId, List<String> labelIds, String from, String to, String subject,
+  public Email(String gmailId, String uniqueId, List<GmailLabel> labels, String from, String to, String subject,
                long timestamp, int sizeInBytes, List<String> attachments) {
     this.gmailId = gmailId;
     this.uniqueId = uniqueId;
-    this.labelIds = Collections.unmodifiableSortedSet(labelIds == null ? Collections.emptySortedSet() : new TreeSet<>(labelIds));
+    this.labels = Collections.unmodifiableSortedSet(labels == null ?
+        Collections.emptySortedSet() : new TreeSet<>(labels));
     this.from = from;
     this.to = to;
     this.subject = subject;
@@ -36,8 +38,8 @@ public class Email implements Observable {
     this.date = new Date(timestamp);
     this.sizeInBytes = sizeInBytes;
     this.attachments = attachments;
-    status = EmailStatus.IGNORED;
-    note = "";
+    status = EmailStatus.NOT_SELECTED;
+    processLog = "";
   }
 
   @FXML
@@ -51,13 +53,17 @@ public class Email implements Observable {
   }
 
   @FXML
-  public String getLabelIdsString() {
-    return StringUtils.join(labelIds, "_");
+  public String getLabelNamesDelimited() {
+    return labels.stream().map(GmailLabel::name).collect(Collectors.joining(", "));
   }
 
   @FXML
   public Date getDate() {
     return date;
+  }
+
+  public SortedSet<GmailLabel> getLabels() {
+    return labels;
   }
 
   String getDateIso8601() {
@@ -92,7 +98,7 @@ public class Email implements Observable {
     if (from.endsWith(">")) {
       return StringUtils.strip(from.substring(0, from.lastIndexOf('<')), " \"");
     } else {
-      return "_";
+      return "";
     }
   }
 
@@ -138,13 +144,14 @@ public class Email implements Observable {
   }
 
   @FXML
-  public String getNote() {
-    return note;
+  @SuppressWarnings("unused")
+  public String getProcessLog() {
+    return processLog;
   }
 
   @FXML
-  public void setNote(String note) {
-    this.note = note;
+  public void setProcessLog(String processLog) {
+    this.processLog = processLog;
   }
 
   @Override
@@ -166,14 +173,14 @@ public class Email implements Observable {
     return "Email{" +
             "gmailId='" + gmailId + '\'' +
             ", uniqueId='" + uniqueId + '\'' +
-            ", labelIds=" + labelIds +
+            ", labels=" + labels +
             ", from='" + from + '\'' +
             ", subject='" + subject + '\'' +
             ", timestamp=" + timestamp +
             ", date=" + date +
             ", sizeInBytes=" + sizeInBytes +
             ", status=" + status +
-            ", note='" + note + '\'' +
+            ", processLog='" + processLog + '\'' +
             '}';
   }
 }

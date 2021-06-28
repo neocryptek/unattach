@@ -1,41 +1,42 @@
 package app.unattach.model;
 
 import app.unattach.controller.LongTask;
-import com.google.api.client.googleapis.batch.BatchRequest;
+import app.unattach.model.attachmentstorage.UserStorage;
+import app.unattach.model.service.GmailService;
+import app.unattach.model.service.GmailServiceException;
+import app.unattach.model.service.GmailServiceManager;
+import app.unattach.model.service.GmailServiceManagerException;
+import app.unattach.utils.Logger;
+import app.unattach.utils.MimeMessagePrettyPrinter;
 import com.google.api.client.googleapis.batch.json.JsonBatchCallback;
 import com.google.api.client.googleapis.json.GoogleJsonError;
 import com.google.api.client.http.HttpHeaders;
-import com.google.api.services.gmail.Gmail;
 import com.google.api.services.gmail.model.*;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.maven.artifact.versioning.DefaultArtifactVersion;
 
 import javax.mail.MessagingException;
-import javax.mail.Session;
 import javax.mail.internet.MimeMessage;
 import java.io.*;
-import java.lang.Thread;
-import java.security.GeneralSecurityException;
 import java.util.*;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
-import static org.apache.commons.codec.binary.Base64.*;
+import static app.unattach.model.GmailLabel.NO_LABEL;
+import static org.apache.commons.codec.binary.Base64.encodeBase64URLSafeString;
 
 public class LiveModel implements Model {
-  private static final Logger LOGGER = Logger.getLogger(LiveModel.class.getName());
-  private static final String USER = "me";
+  private static final Logger logger = Logger.get();
 
   private final Config config;
-  private GmailServiceLifecycleManager serviceLifecycleManager;
-  private Gmail service;
-  private Session session;
-  private List<Email> emails;
+  private final UserStorage userStorage;
+  private final GmailServiceManager gmailServiceManager;
+  private GmailService service;
+  private List<Email> searchResults;
   private String emailAddress;
 
-  public LiveModel() {
+  public LiveModel(UserStorage userStorage, GmailServiceManager gmailServiceManager) {
     this.config = new FileConfig();
+    this.userStorage = userStorage;
+    this.gmailServiceManager = gmailServiceManager;
     configureMimeLibrary();
     reset();
   }
@@ -67,15 +68,13 @@ public class LiveModel implements Model {
   }
 
   private void reset() {
-    serviceLifecycleManager = null;
     service = null;
     emailAddress = null;
-    clearPreviousSearch();
+    clearPreviousSearchResults();
   }
 
-  @Override
-  public void clearPreviousSearch() {
-    emails = new ArrayList<>();
+  private void clearPreviousSearchResults() {
+    searchResults = new ArrayList<>();
   }
 
   @Override
@@ -84,30 +83,30 @@ public class LiveModel implements Model {
   }
 
   @Override
-  public void signIn() throws IOException, GeneralSecurityException {
+  public void signIn() throws GmailServiceManagerException {
+    logger.info("Signing in...");
     configureService();
     try {
       // Test call to the service. This can fail due to token issues.
-      getEmailAddress();
-    } catch (IOException e) {
-      LOGGER.log(Level.WARNING, "Initial signing in failed. Explicitly signing out and retrying..", e);
+      String emailAddress = getEmailAddress();
+      logger.info("Signed in as %s.", emailAddress);
+    } catch (GmailServiceException e) {
+      logger.warn("Initial signing in failed. Explicitly signing out and retrying...", e);
       signOut();
       configureService();
     }
   }
 
-  private void configureService() throws GeneralSecurityException, IOException {
-    serviceLifecycleManager = new GmailServiceLifecycleManager();
+  private void configureService() throws GmailServiceManagerException {
     // 250 quota units / user / second
     // each set of requests should assume they start with clean quota
-    service = serviceLifecycleManager.signIn();
-    Properties props = new Properties();
-    session = Session.getInstance(props);
+    service = gmailServiceManager.signIn();
   }
 
   @Override
-  public void signOut() throws IOException {
-    serviceLifecycleManager.signOut();
+  public void signOut() throws GmailServiceManagerException {
+    logger.info("Signing out...");
+    gmailServiceManager.signOut();
     reset();
   }
 
@@ -123,18 +122,11 @@ public class LiveModel implements Model {
   }
 
   @Override
-  public String getEmailAddress() throws IOException {
+  public String getEmailAddress() throws GmailServiceException {
     if (emailAddress == null) {
-      // unknown quota units
-      Profile profile = service.users().getProfile(USER).setFields("emailAddress").execute();
-      emailAddress = profile.getEmailAddress();
+      emailAddress = service.getEmailAddress();
     }
     return emailAddress;
-  }
-
-  @Override
-  public List<Email> getEmails() {
-    return emails;
   }
 
   @Override
@@ -143,57 +135,46 @@ public class LiveModel implements Model {
   }
 
   private ProcessEmailResult processEmail(Email email, ProcessSettings processSettings)
-      throws IOException, MessagingException {
-    Message message = getRawMessage(email.getGmailId()); // 5 quota units
-    MimeMessage mimeMessage = getMimeMessage(message);
+      throws IOException, MessagingException, GmailServiceException {
+    Message message = service.getRawMessage(email.getGmailId()); // 5 quota units
+    GmailService.trackInDebugMode(logger, message);
+    MimeMessage mimeMessage = GmailService.getMimeMessage(message);
+    logger.info("MIME structure:%n%s", MimeMessagePrettyPrinter.prettyPrint(mimeMessage));
     String newUniqueId = null;
-    if (processSettings.processOption.shouldBackup()) {
+    ProcessOption processOption = processSettings.processOption();
+    if (processOption.backupEmail()) {
       backupEmail(email, processSettings, mimeMessage);
     }
-    Set<String> fileNames = EmailProcessor.process(email, mimeMessage, processSettings);
-    if (processSettings.processOption.shouldDownload() && !processSettings.processOption.shouldRemove()) {
-      addLabel(message.getId(), processSettings.processOption.getDownloadedLabelId());
+    Set<String> originalAttachmentNames = new TreeSet<>();
+    mimeMessage = EmailProcessor.process(userStorage, email, mimeMessage, processSettings, originalAttachmentNames);
+    if (processOption.shouldDownload() && !processOption.shouldRemove() &&
+        !NO_LABEL.id().equals(processOption.downloadedLabelId())) {
+      service.addLabel(message.getId(), processOption.downloadedLabelId());
     }
-    if (processSettings.processOption.shouldRemove() && !fileNames.isEmpty()) {
+    if (processOption.shouldRemove() && !originalAttachmentNames.isEmpty()) {
+      logger.info("New MIME structure:%n%s", MimeMessagePrettyPrinter.prettyPrint(mimeMessage));
       updateRawMessage(message, mimeMessage);
-      Message newMessage = insertSlimMessage(message); // 25 quota units
-      newMessage = getMetadataForNewMessage(newMessage); // 5 quota units
-      Map<String, String> headerMap = getHeaderMap(newMessage);
+      Message newMessage = service.insertMessage(message); // 25 quota units
+      newMessage = service.getUniqueIdAndHeaders(newMessage.getId()); // 5 quota units
+      GmailService.trackInDebugMode(logger, newMessage);
+      Map<String, String> headerMap = GmailService.getHeaderMap(newMessage);
       newUniqueId = headerMap.get("message-id");
-      if (processSettings.processOption.shouldDownload()) {
-        addLabel(newMessage.getId(), processSettings.processOption.getDownloadedLabelId());
+      if (processOption.shouldDownload() && !NO_LABEL.id().equals(processOption.downloadedLabelId())) {
+        service.addLabel(newMessage.getId(), processOption.downloadedLabelId());
       }
-      addLabel(newMessage.getId(), processSettings.processOption.getRemovedLabelId());
-      removeOriginalMessage(processSettings.processOption.shouldDeleteOriginal(), message.getId()); // 5-10 quota units
+      if (!NO_LABEL.id().equals(processOption.removedLabelId())) {
+        service.addLabel(newMessage.getId(), processOption.removedLabelId());
+      }
+      // 5-10 quota units
+      service.removeMessage(message.getId(), processOption.permanentlyRemoveOriginal());
     }
-    return new ProcessEmailResult(newUniqueId, fileNames);
-  }
-
-  private Message getRawMessage(String emailId) throws IOException {
-    // 1 messages.get == 5 quota units
-    // download limit = 2500 MB / day / user
-    return service.users().messages().get(USER, emailId).setFormat("raw").execute();
-  }
-
-  private MimeMessage getMimeMessage(Message message) throws MessagingException, IOException {
-    String rawBefore = message.getRaw();
-    if (rawBefore == null) {
-      throw new IOException("Unable to extract the contents of the email.");
-    }
-    byte[] emailBytes = decodeBase64(rawBefore);
-    try (InputStream is = new ByteArrayInputStream(emailBytes)) {
-      return new MimeMessage(session, is);
-    }
+    return new ProcessEmailResult(newUniqueId, originalAttachmentNames);
   }
 
   private void backupEmail(Email email, ProcessSettings processSettings, MimeMessage mimeMessage)
           throws IOException, MessagingException {
-    //noinspection ResultOfMethodCallIgnored
-    processSettings.targetDirectory.mkdirs();
     String filename = email.getGmailId() + ".eml";
-    try (OutputStream os = new FileOutputStream(new File(processSettings.targetDirectory, filename))) {
-      mimeMessage.writeTo(os);
-    }
+    userStorage.saveMessage(mimeMessage, processSettings.targetDirectory(), filename);
   }
 
   private void updateRawMessage(Message message, MimeMessage mimeMessage) throws IOException, MessagingException {
@@ -204,41 +185,16 @@ public class LiveModel implements Model {
     }
   }
 
-  private void addLabel(String emailId, String labelId) throws IOException {
-    if (labelId == null) {
-      LOGGER.log(Level.WARNING, "Cannot add a label, because it was not specified.");
-      return;
-    }
-    ModifyMessageRequest modifyMessageRequest = new ModifyMessageRequest();
-    modifyMessageRequest.setAddLabelIds(Collections.singletonList(labelId));
-    // 1 messages.modify == 5 quota units
-    service.users().messages().modify(USER, emailId, modifyMessageRequest).execute();
-  }
-
-  private Message insertSlimMessage(Message message) throws IOException {
-    // 1 messages.insert == 25 quota units
-    // upload limit = 500 MB / day / user
-    return service.users().messages().insert(USER, message).setInternalDateSource("dateHeader").execute();
-  }
-
-  private Message getMetadataForNewMessage(Message newMessage) throws IOException {
-    // 1 messages.get == 5 quota units
-    return service.users().messages().get(LiveModel.USER, newMessage.getId()).setFields("id,payload/headers").execute();
-  }
-
-  private void removeOriginalMessage(boolean deleteOriginal, String emailId) throws IOException {
-    if (deleteOriginal) {
-      // 1 messages.delete == 10 quota units
-      service.users().messages().delete(USER, emailId).execute();
-    } else {
-      // 1 messages.trash == 5 quota units
-      service.users().messages().trash(USER, emailId).execute();
-    }
-  }
-
   @Override
-  public GetEmailMetadataTask getSearchTask(String query) throws IOException, InterruptedException {
-    List<String> emailIdsToProcess = getEmailIds(query).stream().map(Message::getId).collect(Collectors.toList());
+  public GetEmailMetadataTask getSearchTask(String query) throws GmailServiceException {
+    logger.info("Getting email labels...");
+    SortedMap<String, String> idToLabel = getIdToLabel();
+    logger.info("Searching with query '%s'...", query);
+    clearPreviousSearchResults();
+    List<Message> messages = service.search(query);
+    logger.info("Found %d results.", messages.size());
+    ArrayList<String> emailIdsToProcess =
+        messages.stream().map(Message::getId).collect(Collectors.toCollection(ArrayList::new));
 
     JsonBatchCallback<Message> perEmailCallback = new JsonBatchCallback<>() {
       @Override
@@ -248,81 +204,70 @@ public class LiveModel implements Model {
 
       @Override
       public void onSuccess(Message message, HttpHeaders httpHeaders) {
-        Map<String, String> headerMap = getHeaderMap(message);
+        GmailService.trackInDebugMode(logger, message);
+        Map<String, String> headerMap = GmailService.getHeaderMap(message);
         String emailId = message.getId();
         String uniqueId = headerMap.get("message-id");
         List<String> labelIds = message.getLabelIds();
+        List<GmailLabel> labels = getLabelsForIds(idToLabel, labelIds);
         String from = headerMap.get("from");
         String to = headerMap.get("to");
         String subject = headerMap.get("subject");
         long timestamp = message.getInternalDate();
-        List<MessagePart> messageParts = message.getPayload().getParts();
-        if (messageParts != null) { // Means, this is not a blank message
-          List<String> attachments = messageParts.stream()
-                  .map(MessagePart::getFilename).filter(StringUtils::isNotBlank).collect(Collectors.toList());
-          Email email = new Email(emailId, uniqueId, labelIds, from, to, subject, timestamp, message.getSizeEstimate(),
-                  attachments);
-          emails.add(email);
-        }
-        else {
-          LOGGER.log(Level.WARNING, "Skipping message as GMail returned no parts:\n" +
-                  "\tGMail-ID: " + emailId + "\n" +
-                  "\tMessage-ID: " + uniqueId + "\n" +
-                  "\tFrom: " + from + "\n" +
-                  "\tTo: " + to + "\n" +
-                  "\tSubject: " + subject + "\n" +
-                  "\tDate: " + new Date(timestamp));
-        }
+        List<String> attachmentNames = getAttachmentNames(message.getPayload());
+        Email email = new Email(emailId, uniqueId, labels, from, to, subject, timestamp, message.getSizeEstimate(),
+            attachmentNames);
+        searchResults.add(email);
       }
     };
 
-    return new GetEmailMetadataTask(
-        emailIdsToProcess,
-        (startIndexInclusive, endIndexExclusive) -> {
-          BatchRequest batch = service.batch();
-          for (int emailIndex = startIndexInclusive; emailIndex < endIndexExclusive; ++emailIndex) {
-            getEmailMetadata(service, emailIdsToProcess.get(emailIndex), batch, perEmailCallback);
-          }
-          batch.execute();
-        }
+    return new GetEmailMetadataTask(emailIdsToProcess, (startIndexInclusive, endIndexExclusive) -> {
+        logger.info("Getting info about emails with index [%d, %d)...", startIndexInclusive, endIndexExclusive);
+        List<String> emailIds = emailIdsToProcess.subList(startIndexInclusive, endIndexExclusive);
+        service.batchGetMetadata(emailIds, perEmailCallback);
+      }
     );
   }
 
-  private List<Message> getEmailIds(String query) throws IOException, InterruptedException {
-    List<Message> messages = new ArrayList<>();
-    String pageToken = null;
-    do {
-      // 1 messages.list == 5 quota units
-      Gmail.Users.Messages.List request = service.users().messages().list(USER).setFields("messages/id").setQ(query)
-          .setMaxResults(100000L).setPageToken(pageToken);
-      ListMessagesResponse response = request.execute();
-      if (response == null) {
-        break;
-      }
-      List<Message> responseMessages = response.getMessages();
-      if (responseMessages == null) {
-        break;
-      }
-      messages.addAll(responseMessages);
-      pageToken = response.getNextPageToken();
-      Thread.sleep(25);
-    } while (pageToken != null);
-    return messages;
-  }
-
-  @Override
-  public SortedMap<String, String> getIdToLabel() throws IOException {
-    // 1 labels.get == 1 quota unit
-    ListLabelsResponse response = service.users().labels().list(USER).setFields("labels/id,labels/name").execute();
-    SortedMap<String, String> labelToId = new TreeMap<>();
-    for (Label label : response.getLabels()) {
-      labelToId.put(label.getId(), label.getName());
+  private List<GmailLabel> getLabelsForIds(SortedMap<String, String> idToLabel, List<String> labelIds) {
+    if (labelIds == null) {
+      return List.of();
     }
-    return labelToId;
+    return labelIds.stream().map(id -> new GmailLabel(id, idToLabel.getOrDefault(id, id))).collect(Collectors.toList());
+  }
+
+  private List<String> getAttachmentNames(MessagePart part) {
+    Set<String> attachmentNames = new TreeSet<>();
+    getAttachmentNamesRecursive(attachmentNames, part);
+    return new ArrayList<>(attachmentNames);
+  }
+
+  private void getAttachmentNamesRecursive(Set<String> attachmentNames, MessagePart part) {
+    String attachmentName = part.getFilename();
+    if (attachmentName != null) {
+      attachmentNames.add(attachmentName);
+      return;
+    }
+    List<MessagePart> subParts = part.getParts();
+    if (subParts != null) {
+      for (MessagePart subPart : subParts) {
+        getAttachmentNamesRecursive(attachmentNames, subPart);
+      }
+    }
   }
 
   @Override
-  public String createLabel(String name) throws IOException {
+  public List<Email> getSearchResults() {
+    return searchResults;
+  }
+
+  @Override
+  public SortedMap<String, String> getIdToLabel() throws GmailServiceException {
+    return service.getIdToLabel();
+  }
+
+  @Override
+  public String createLabel(String name) throws GmailServiceException {
     Label labelIn = new Label();
     labelIn.setName(name);
     labelIn.setLabelListVisibility("labelShow");
@@ -331,28 +276,12 @@ public class LiveModel implements Model {
     labelColor.setBackgroundColor("#ffffff");
     labelColor.setTextColor("#fb4c2f");
     labelIn.setColor(labelColor);
-    Label labelOut = service.users().labels().create(USER, labelIn).execute();
+    Label labelOut = service.createLabel(labelIn);
     return labelOut.getId();
   }
 
   @Override
   public Config getConfig() {
     return config;
-  }
-
-  private static void getEmailMetadata(Gmail service, String messageId, BatchRequest batch,
-                                       JsonBatchCallback<Message> callback) throws IOException {
-    // 1 messages.get == 5 quota units
-    String fields = "id,labelIds,internalDate,payload/parts/filename,payload/headers,sizeEstimate";
-    service.users().messages().get(LiveModel.USER, messageId).setFields(fields).queue(batch, callback);
-  }
-
-  private static Map<String, String> getHeaderMap(Message message) {
-    List<MessagePartHeader> headers = message.getPayload().getHeaders();
-    Map<String, String> headerMap = new HashMap<>(headers.size());
-    for (MessagePartHeader header : headers) {
-      headerMap.put(header.getName().toLowerCase(), header.getValue());
-    }
-    return headerMap;
   }
 }

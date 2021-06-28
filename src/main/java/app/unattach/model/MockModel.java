@@ -1,23 +1,18 @@
 package app.unattach.model;
 
 import app.unattach.controller.LongTask;
+import app.unattach.utils.Logger;
 import org.apache.maven.artifact.versioning.DefaultArtifactVersion;
 
 import java.io.IOException;
 import java.util.*;
-import java.util.logging.Logger;
 
 public class MockModel implements Model {
-  private static final Logger LOGGER = Logger.getLogger(MockModel.class.getName());
+  private static final Logger logger = Logger.get();
 
   private final Config config = new BaseConfig();
   private final Random random = new Random(1337);
   private ArrayList<Email> emails = new ArrayList<>();
-
-  @Override
-  public void clearPreviousSearch() {
-    emails = new ArrayList<>();
-  }
 
   @Override
   public String createLabel(String name) {
@@ -44,7 +39,9 @@ public class MockModel implements Model {
       for (int i = minEmailSizeInBytes / 1000 / 1000; i < maxEmailId; ++i) {
         if (startIndexInclusive <= i && i < endIndexExclusive) {
           String emailId = String.valueOf(i);
-          emails.add(new Email(emailId, emailId, Arrays.asList("INBOX", "IMPORTANT"),
+          List<GmailLabel> labels =
+              Arrays.asList(new GmailLabel("INBOX", "INBOX"), new GmailLabel("IMPORTANT", "IMPORTANT"));
+          emails.add(new Email(emailId, emailId, labels,
               "john.doe@example.com", "jane.doe@example.com",
               "Subject " + i, System.currentTimeMillis(),
               i * (int) Math.pow(2, 20), Collections.singletonList("data.zip")));
@@ -59,7 +56,7 @@ public class MockModel implements Model {
   }
 
   @Override
-  public List<Email> getEmails() {
+  public List<Email> getSearchResults() {
     return emails;
   }
 
@@ -90,25 +87,25 @@ public class MockModel implements Model {
 
   @Override
   public void signIn() {
-    LOGGER.info("signIn");
+    logger.info("signIn");
   }
 
   @Override
   public void signOut() {
-    LOGGER.info("signOut");
+    logger.info("signOut");
   }
 
   @Override
   public void sendToServer(String contentDescription, String userEmail, String stackTraceText, String userText) {
-    LOGGER.info("========== sendToServer ==========");
-    LOGGER.info(userEmail);
-    LOGGER.info(stackTraceText);
-    LOGGER.info(userText);
-    LOGGER.info("========== sendToServer ==========");
+    logger.info("========== sendToServer ==========");
+    logger.info(userEmail);
+    logger.info(stackTraceText);
+    logger.info(userText);
+    logger.info("========== sendToServer ==========");
   }
 
   @Override
   public void subscribe(String emailAddress) {
-    LOGGER.info("subscribe: " + emailAddress);
+    logger.info("subscribe: " + emailAddress);
   }
 }

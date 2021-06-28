@@ -5,19 +5,36 @@ import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
+import java.util.Set;
 
 public class BaseConfig implements Config {
-  private static final String DELETE_ORIGINAL_PROPERTY = "delete_original";
+  private static final String DATE_FORMAT_PROPERTY = "date_format";
+  private static final String REMOVE_ORIGINAL_PROPERTY = "remove_original";
   private static final String DOWNLOADED_LABEL_ID_PROPERTY = "downloaded_label_id";
   private static final String EMAIL_SIZE_PROPERTY = "email_size";
   private static final String FILENAME_SCHEMA_PROPERTY = "filename_schema";
   private static final String LABEL_IDS_PROPERTY = "label_ids";
-  private static final String NUMBER_OF_RUNS_PROPERTY = "number_of_runs";
+  private static final String PROCESS_EMBEDDED_PROPERTY = "process_embedded";
   private static final String REMOVED_LABEL_ID_PROPERTY = "removed_label_id";
   private static final String SEARCH_QUERY_PROPERTY = "search_query";
   private static final String SIGN_IN_AUTOMATICALLY_PROPERTY = "sign_in_automatically";
   private static final String SUBSCRIBE_TO_UPDATES_PROPERTY = "subscribe_to_updates";
   private static final String TARGET_DIRECTORY_PROPERTY = "target_directory";
+
+  private static final Set<String> PROPERTY_NAMES = Set.of(
+      DATE_FORMAT_PROPERTY,
+      REMOVE_ORIGINAL_PROPERTY,
+      DOWNLOADED_LABEL_ID_PROPERTY,
+      EMAIL_SIZE_PROPERTY,
+      FILENAME_SCHEMA_PROPERTY,
+      LABEL_IDS_PROPERTY,
+      PROCESS_EMBEDDED_PROPERTY,
+      REMOVED_LABEL_ID_PROPERTY,
+      SEARCH_QUERY_PROPERTY,
+      SIGN_IN_AUTOMATICALLY_PROPERTY,
+      SUBSCRIBE_TO_UPDATES_PROPERTY,
+      TARGET_DIRECTORY_PROPERTY
+  );
 
   protected final Properties config;
 
@@ -31,13 +48,23 @@ public class BaseConfig implements Config {
   public void saveConfig() {}
 
   @Override
-  public int getEmailSize() {
-    return Integer.parseInt(config.getProperty(EMAIL_SIZE_PROPERTY, "1"));
+  public Set<String> getPropertyNames() {
+    return PROPERTY_NAMES;
   }
 
   @Override
-  public boolean getDeleteOriginal() {
-    return Boolean.parseBoolean(config.getProperty(DELETE_ORIGINAL_PROPERTY, "true"));
+  public int getEmailSize() {
+    return Integer.parseInt(config.getProperty(EMAIL_SIZE_PROPERTY, "5"));
+  }
+
+  @Override
+  public String getDateFormat() {
+    return config.getProperty(DATE_FORMAT_PROPERTY, DateFormat.ISO_8601_DATE.getPattern());
+  }
+
+  @Override
+  public boolean getRemoveOriginal() {
+    return Boolean.parseBoolean(config.getProperty(REMOVE_ORIGINAL_PROPERTY, "true"));
   }
 
   @Override
@@ -50,13 +77,14 @@ public class BaseConfig implements Config {
     return Arrays.asList(config.getProperty(LABEL_IDS_PROPERTY, "").split(","));
   }
 
-  private int getNumberOfRuns() {
-    return Integer.parseInt(config.getProperty(NUMBER_OF_RUNS_PROPERTY, "0"));
-  }
-
   @Override
   public String getDownloadedLabelId() {
     return config.getProperty(DOWNLOADED_LABEL_ID_PROPERTY);
+  }
+
+  @Override
+  public boolean getProcessEmbedded() {
+    return Boolean.parseBoolean(config.getProperty(PROCESS_EMBEDDED_PROPERTY, "true"));
   }
 
   @Override
@@ -85,11 +113,9 @@ public class BaseConfig implements Config {
   }
 
   @Override
-  public int incrementNumberOfRuns() {
-    int numberOfRuns = getNumberOfRuns() + 1;
-    config.setProperty(NUMBER_OF_RUNS_PROPERTY, Integer.toString(numberOfRuns));
+  public void saveDateFormat(String pattern) {
+    config.setProperty(DATE_FORMAT_PROPERTY, pattern);
     saveConfig();
-    return numberOfRuns;
   }
 
   @Override
@@ -101,6 +127,12 @@ public class BaseConfig implements Config {
   @Override
   public void saveLabelIds(List<String> labelIds) {
     config.setProperty(LABEL_IDS_PROPERTY, String.join(",", labelIds));
+    saveConfig();
+  }
+
+  @Override
+  public void saveProcessEmbedded(boolean processEmbedded) {
+    config.setProperty(PROCESS_EMBEDDED_PROPERTY, Boolean.toString(processEmbedded));
     saveConfig();
   }
 
@@ -147,8 +179,8 @@ public class BaseConfig implements Config {
   }
 
   @Override
-  public void setDeleteOriginal(boolean deleteOriginal) {
-    config.setProperty(DELETE_ORIGINAL_PROPERTY, Boolean.toString(deleteOriginal));
+  public void saveRemoveOriginal(boolean removeOriginal) {
+    config.setProperty(REMOVE_ORIGINAL_PROPERTY, Boolean.toString(removeOriginal));
     saveConfig();
   }
 

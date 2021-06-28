@@ -1,0 +1,40 @@
+{
+  "historyId" : "5715405",
+  "id" : "17763cfd0c638ff9",
+  "internalDate" : "1612287300000",
+  "labelIds" : [ "UNREAD", "IMPORTANT", "Label_10", "Label_11", "SENT", "INBOX" ],
+  "payload" : {
+    "headers" : [ {
+      "name" : "Received",
+      "value" : "from 12717724459 named unknown by gmailapi.google.com with HTTPREST; Tue, 2 Feb 2021 09:39:30 -0800"
+    }, {
+      "name" : "MIME-Version",
+      "value" : "1.0"
+    }, {
+      "name" : "Date",
+      "value" : "Tue, 2 Feb 2021 18:35:00 +0100"
+    }, {
+      "name" : "Message-Id",
+      "value" : "<CAFCfwCoZXBX1-xO6O8kkEmb+ksrTFqzg+go1ywOP3noO40N3Xg@mail.gmail.com>"
+    }, {
+      "name" : "Subject",
+      "value" : "Unattach test: simple attachment"
+    }, {
+      "name" : "From",
+      "value" : "\"Rok Strniša\" <rok.strnisa@gmail.com>"
+    }, {
+      "name" : "To",
+      "value" : "\"Rok Strniša\" <rok.strnisa@gmail.com>"
+    }, {
+      "name" : "Content-Type",
+      "value" : "multipart/mixed; boundary=\"000000000000e3d7ec05ba5de359\""
+    } ],
+    "parts" : [ {
+      "filename" : ""
+    } ]
+  },
+  "raw" : "UmVjZWl2ZWQ6IGZyb20gMTI3MTc3MjQ0NTkNCgluYW1lZCB1bmtub3duDQoJYnkgZ21haWxhcGkuZ29vZ2xlLmNvbQ0KCXdpdGggSFRUUFJFU1Q7DQoJVHVlLCAyIEZlYiAyMDIxIDA5OjM5OjMwIC0wODAwDQpNSU1FLVZlcnNpb246IDEuMA0KRGF0ZTogVHVlLCAyIEZlYiAyMDIxIDE4OjM1OjAwICswMTAwDQpNZXNzYWdlLUlkOiA8Q0FGQ2Z3Q29aWEJYMS14TzZPOGtrRW1iK2tzclRGcXpnK2dvMXl3T1Azbm9PNDBOM1hnQG1haWwuZ21haWwuY29tPg0KU3ViamVjdDogVW5hdHRhY2ggdGVzdDogc2ltcGxlIGF0dGFjaG1lbnQNCkZyb206ID0_VVRGLTg_Qj9VbTlySUZOMGNtNXB4YUZoPz0gPHJvay5zdHJuaXNhQGdtYWlsLmNvbT4NClRvOiA9P1VURi04P0I_VW05cklGTjBjbTVweGFGaD89IDxyb2suc3RybmlzYUBnbWFpbC5jb20-DQpDb250ZW50LVR5cGU6IG11bHRpcGFydC9taXhlZDsgYm91bmRhcnk9IjAwMDAwMDAwMDAwMGUzZDdlYzA1YmE1ZGUzNTkiDQoNCi0tMDAwMDAwMDAwMDAwZTNkN2VjMDViYTVkZTM1OQ0KQ29udGVudC1UeXBlOiBtdWx0aXBhcnQvYWx0ZXJuYXRpdmU7IGJvdW5kYXJ5PSIwMDAwMDAwMDAwMDBlM2Q3ZTkwNWJhNWRlMzU3Ig0KDQotLTAwMDAwMDAwMDAwMGUzZDdlOTA1YmE1ZGUzNTcNCkNvbnRlbnQtVHlwZTogdGV4dC9wbGFpbjsgY2hhcnNldD11dGYtOA0KQ29udGVudC1UcmFuc2Zlci1FbmNvZGluZzogN2JpdA0KDQpUZXN0IGJvZHkuDQoKCgo9PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PQpQcmV2aW91cyBhdHRhY2htZW50czoKIC0gbG9nby0yNTYucG5nIChmaWxlbmFtZTogMTc3NjNjZmQ5ZGI0M2JjMi0wLWxvZ28tMjU2LnBuZykKCkluZm9ybWF0aW9uIGFib3V0IHRoZSBjaGFuZ2U6CiAtIE1hZGUgd2l0aDogICAgICAgICAgICAgICAgIFVuYXR0YWNoIDMuMC4wCiAtIERhdGUgYW5kIHRpbWU6ICAgICAgICAgICAgIDIwMjEtMDItMDJUMTg6Mzk6MjkuNjQwMzM5KzAxOjAwCiAtIERvd25sb2FkIHRhcmdldCBob3N0bmFtZTogIHJvay1tYWMtYzAydDI0cnpoZjFyLmNvcnAuaW1wcm9iYWJsZS5pbwogLSBEb3dubG9hZCB0YXJnZXQgZGlyZWN0b3J5OiAvVXNlcnMvcm9rL0Rvd25sb2Fkcy9VbmF0dGFjaAoNCi0tMDAwMDAwMDAwMDAwZTNkN2U5MDViYTVkZTM1Nw0KQ29udGVudC1UeXBlOiB0ZXh0L2h0bWw7IGNoYXJzZXQ9dXRmLTgNCkNvbnRlbnQtVHJhbnNmZXItRW5jb2Rpbmc6IDdiaXQNCg0KPGh0bWw-CiA8aGVhZD48L2hlYWQ-CiA8Ym9keT4KICA8ZGl2IGRpcj0ibHRyIj4KICAgVGVzdCBib2R5LgogIDwvZGl2PiAKICA8aHI-CiAgPHA-UHJldmlvdXMgYXR0YWNobWVudHM6PC9wPgogIDx1bD4gCiAgIDxsaT5sb2dvLTI1Ni5wbmcgKGZpbGVuYW1lOiAvVXNlcnMvcm9rL0Rvd25sb2Fkcy9VbmF0dGFjaC8xNzc2M2NmZDlkYjQzYmMyLTAtbG9nby0yNTYucG5nLCA8YSBocmVmPSJmaWxlOi8vLy9Vc2Vycy9yb2svRG93bmxvYWRzL1VuYXR0YWNoLzE3NzYzY2ZkOWRiNDNiYzItMC1sb2dvLTI1Ni5wbmciPmxvY2FsIGxpbms8L2E-KTwvbGk-IAogIDwvdWw-CiAgPHA-PC9wPiAKICA8cD5JbmZvcm1hdGlvbiBhYm91dCB0aGUgY2hhbmdlOjwvcD4KICA8dWw-IAogICA8bGk-TWFkZSB3aXRoOiA8YSBocmVmPSJodHRwczovL3VuYXR0YWNoLmFwcCI-VW5hdHRhY2g8L2E-IDMuMC4wPC9saT4gCiAgIDxsaT5EYXRlIGFuZCB0aW1lOiAyMDIxLTAyLTAyVDE4OjM5OjI5LjY0MDMzOSswMTowMDwvbGk-IAogICA8bGk-RG93bmxvYWQgdGFyZ2V0IGhvc3QgbmFtZTogcm9rLW1hYy1jMDJ0MjRyemhmMXIuY29ycC5pbXByb2JhYmxlLmlvPC9saT4gCiAgIDxsaT5Eb3dubG9hZCB0YXJnZXQgZGlyZWN0b3J5OiAvVXNlcnMvcm9rL0Rvd25sb2Fkcy9VbmF0dGFjaDwvbGk-IAogICA8bGk-PGk-RmlsZSBsaW5rcyBvbmx5IHdvcmsgaW4gbmF0aXZlIGVtYWlsIGFwcHMgKGUuZy4gTWFpbCwgT3V0bG9vaykgb24gdGhlIHRhcmdldCBob3N0LjwvaT48L2xpPiAKICA8L3VsPgogIDxwPjwvcD4gCiA8L2JvZHk-CjwvaHRtbD4NCi0tMDAwMDAwMDAwMDAwZTNkN2U5MDViYTVkZTM1Ny0tDQoNCi0tMDAwMDAwMDAwMDAwZTNkN2VjMDViYTVkZTM1OS0tDQo=",
+  "sizeEstimate" : 2105,
+  "snippet" : "Test body. Previous attachments: logo-256.png (filename: /Users/rok/Downloads/Unattach/17763cfd9db43bc2-0-logo-256.png, local link) Information about the change: Made with: Unattach 3.2.0 Date and time",
+  "threadId" : "17763cef3d9fa7d3"
+}
